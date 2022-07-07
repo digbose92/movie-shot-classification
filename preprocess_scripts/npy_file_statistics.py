@@ -14,7 +14,8 @@ for file in tqdm(npy_file_list):
 
 #mean shape: 6.67
 #median shape: 5
-print(np.percentile(shape_data,75)) #8
-num_shapes=[s for s in shape_data if s>=8]
-print(len(num_shapes))
+# print(np.percentile(shape_data,75)) #8
+# num_shapes=[s for s in shape_data if s>=8]
+# print(len(num_shapes))
+print(min(shape_data))
 # print(mean(shape_data),median(shape_data))

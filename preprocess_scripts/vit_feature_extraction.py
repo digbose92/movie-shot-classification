@@ -50,32 +50,82 @@ def run_frame_wise_feature_inference(model,transform,filename,device,dim=768,des
             break
     return feature_list, frame_id
 
-#declare vit models from timm specification
+def run_frame_wise_feature_inference_stack_mode(model,transform,filename,device,dim=768,batch_size=32,desired_frameRate=4):
+    #print(filename)
+    vcap=cv2.VideoCapture(filename)
+    frameRate = vcap.get(5)
+    intfactor=math.ceil(frameRate/desired_frameRate)
+    feature_list=np.zeros((0,dim))
+    frame_id=0
+    length = int(vcap.get(cv2.CAP_PROP_FRAME_COUNT))
+    img_array_list=[]
+    while True:
+        ret, frame = vcap.read()
+        if(ret==True):
+            if (frame_id % intfactor == 0):
+                frame=cv2.cvtColor(frame,cv2.COLOR_BGR2RGB)
+                frame=Image.fromarray(frame)
+                img_array_list.append(frame)
+            frame_id=frame_id+1
+        else:
+            break
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+
+    transform_tensor=[transform(i) for i in img_array_list]
+    tensor_stack=torch.stack(transform_tensor,dim=0)
+    tensor_stack=tensor_stack.to(device)
+
+    feat_array=np.zeros((0,dim))
+
+    #need to pass batches of batch size dimension as input
+    if(tensor_stack.size()[0]<=batch_size):
+        feat_tensor=model.forward_features(tensor_stack)
+        feat_array=feat_tensor.cpu().detach().numpy()
+    else:
+        num_batches=math.ceil(tensor_stack.size()[0]/batch_size)
+        for i in np.arange(num_batches):
+            start=i*(batch_size)
+            end=(i+1)*batch_size
+            if(end>tensor_stack.size()[0]):
+                end=tensor_stack.size()[0]
+            batch_c=tensor_stack[start:end,:,:,:]
+            feat_tensor=model.forward_features(batch_c)
+            feat_tensor=feat_tensor.cpu().detach().numpy()
+            feat_array=np.vstack([feat_array,feat_tensor])
+
+    del tensor_stack
+    torch.cuda.empty_cache()
+    return(feat_array)
+
 print('Loading model')
 model = timm.create_model('vit_base_patch16_224', pretrained=True)
 device=torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 model=model.to(device)
 #model=nn.DataParallel(model) #doing data parallelism for the model to handle large batch sizes
 model.eval()
-#print(model)
+# #print(model)
 config = resolve_data_config({}, model=model)
 transform = create_transform(**config)
 
 print('Loaded model')
 h1 = model.pre_logits.register_forward_hook(getActivation('pre_logits'))
-#declaring the data 
-feature_folder="/bigdata/digbose92/MovieNet/features/vit_features/fps_4"
-csv_file="../data/MovieShot_complete_label_file.csv"
-csv_data=pd.read_csv(csv_file)['Filename']
+# #declaring the data 
+feature_folder="/bigdata/digbose92/MovieNet/features/vit_features/feat_CMD_fps_4"
+# feature_folder="/bigdata/digbose92/MovieNet/features/vit_features/fps_4"
+csv_file="../data/CLIP_file_list_tag.csv"
+#"../data/MovieShot_complete_label_file.csv"
+csv_data=pd.read_csv(csv_file)['File']
 
-#feature nomenclature would be <id>_<shot_0042.mp4> i.e. tt5022424_shot_0042.mp4
+# #feature nomenclature would be <id>_<shot_0042.mp4> i.e. tt5022424_shot_0042.mp4
 for file in tqdm(csv_data):
     imdb_key=file.split("/")[-2]
     file_key=file.split("/")[-1]
-    npy_file=os.path.join(feature_folder,imdb_key+"_"+file_key+".npy")
+    npy_file=os.path.join(feature_folder,file_key.split(".")[0]+".npy")
+    #print(npy_file)
     if(os.path.exists(npy_file) is False):
-        frame_tensor,frame_id=run_frame_wise_feature_inference(model,transform,file,device)
-        np.save(npy_file,frame_tensor)
+        frame_array=run_frame_wise_feature_inference_stack_mode(model,transform,file,device)
+        np.save(npy_file,frame_array)
 
 
 
