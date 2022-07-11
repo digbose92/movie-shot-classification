@@ -111,22 +111,27 @@ transform = create_transform(**config)
 print('Loaded model')
 h1 = model.pre_logits.register_forward_hook(getActivation('pre_logits'))
 # #declaring the data 
-feature_folder="/bigdata/digbose92/MovieNet/features/vit_features/feat_CMD_fps_4"
+feature_folder="/bigdata/digbose92/VidSitu_data/features/vit_base"
+#"/bigdata/digbose92/MovieNet/features/vit_features/feat_CMD_fps_4"
 # feature_folder="/bigdata/digbose92/MovieNet/features/vit_features/fps_4"
-csv_file="../data/CLIP_file_list_tag.csv"
+csv_file="/data/digbose92/codes/visual-scene-recognition/movie-shot-classification/data/Non_verified_VidSitu_samples.csv"
+#"../data/CLIP_file_list_tag.csv"
 #"../data/MovieShot_complete_label_file.csv"
 csv_data=pd.read_csv(csv_file)['File']
-
+num_files_processed=0
 # #feature nomenclature would be <id>_<shot_0042.mp4> i.e. tt5022424_shot_0042.mp4
 for file in tqdm(csv_data):
-    imdb_key=file.split("/")[-2]
+    #imdb_key=file.split("/")[-2]
     file_key=file.split("/")[-1]
     npy_file=os.path.join(feature_folder,file_key.split(".")[0]+".npy")
     #print(npy_file)
+    #print(npy_file)
     if(os.path.exists(npy_file) is False):
+        num_files_processed+=1
         frame_array=run_frame_wise_feature_inference_stack_mode(model,transform,file,device)
         np.save(npy_file,frame_array)
 
+print('Number of processed files: %d' %(num_files_processed))
 
 
 
